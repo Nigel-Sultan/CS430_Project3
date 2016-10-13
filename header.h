@@ -1,5 +1,5 @@
-#ifndef OBJECTS_H_
-#define OBJECTS_H_
+#ifndef HEADER_H_
+#define HEADER_H_
 
 typedef struct{
   	int type; // 0 = camera, 1 = sphere, 2 = light
@@ -26,4 +26,4 @@ typedef struct{
   	};
 } Object;
 
-#endif // OBJECTS_H_
+#endif // HEADER_H_

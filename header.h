@@ -3,6 +3,7 @@
 
 typedef struct{
   	int type; // 0 = camera, 1 = sphere, 2 = plane, 3 = light
+  	double color[3];
   	union {
     	struct {
       		double width;

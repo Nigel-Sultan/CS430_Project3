@@ -2,7 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "objects.h"
+#include "header.h"
+
+void skip_ws(FILE*);
+char* next_string(FILE*);
+double next_number(FILE*);
+double* next_vector(FILE*);
+void expect_c(FILE*, int);
 
 int line = 1;
 
@@ -115,8 +121,8 @@ void read_scene(char* filename, Object** objects) {
                     		(strcmp(key, "specular_color") == 0) ||
 							(strcmp(key, "position") == 0) ||
 							(strcmp(key, "direction") == 0) ||
-                    		(strcmp(key, "normal") == 0)
-							(strcmp(key, "color") == 0) ||) {
+                    		(strcmp(key, "normal") == 0) ||
+							(strcmp(key, "color") == 0)) {
                         double* value = next_vector(json);
                         if (strcmp(key, "diffuse_color") == 0) {
                         	if (strcmp(temp, "sphere") == 0){

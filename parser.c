@@ -93,7 +93,9 @@ void read_scene(char* filename, Object** objects) {
 					(strcmp(key, "radial-a2") == 0) ||
 					(strcmp(key, "radial-a1") == 0) ||
 					(strcmp(key, "radial-a0") == 0) ||
-					(strcmp(key, "angular-a0") == 0)) {
+					(strcmp(key, "angular-a0") == 0)
+					(strcmp(key, "theta") == 0)
+					(strcmp(key, "ns") == 0)) {
                         double value = next_number(json);
                         if (strcmp(key, "width") == 0){
                             objects[i]->camera.width = value;
@@ -113,8 +115,14 @@ void read_scene(char* filename, Object** objects) {
 						else if(strcmp(key, "radial-a0") == 0){
 							objects[i]->light.radial_a0 = value;
 						}
-						else{
+						else if(strcmp(key, "angular-a0") == 0){
 							objects[i]->light.angular_a0 = value;
+						}
+						else if(strcmp(key, "theta") == 0){
+							objects[i]->light.theta = value;
+						}
+						else{
+							objects[i]->light.ns = value;
 						}
                     }
                     else if ((strcmp(key, "diffuse_color") == 0) ||

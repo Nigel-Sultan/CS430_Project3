@@ -3,7 +3,6 @@
 
 typedef struct{
   	int type; // 0 = camera, 1 = sphere, 2 = plane, 3 = light
-  	double color[3];
   	union {
     	struct {
       		double width;
@@ -29,6 +28,8 @@ typedef struct{
       		double radial_a1;
       		double radial_a0;
       		double angular_a0;
+      		double theta;
+      		double ns;
     	} light;
   	};
 } Object;

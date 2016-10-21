@@ -19,8 +19,13 @@ typedef struct Image{   //image struct that keeps track of the data in the input
     unsigned char *data;
 } Image;
 
-Image* RayCasting(char*, int, int, Object**);
-int writeImage(char*, char*, Image*);
+Image* ray_casting(char*, int, int, Object**);
+int write_image(char*, char*, Image*);
+double frad(int, double*, Object**);
+double fang(int, double*, Object**);
+double* diffuse(int, int, double*, double*, Object**);
+double* specular(int, int, double, double*, double*, Object**);
+double clamp(double);
 
 int main(int argc, char **argv) {
     if(argc > 5){
@@ -30,8 +35,8 @@ int main(int argc, char **argv) {
 
     char *width = argv[1];
     char *height = argv[2];
-    char *inputFilename = argv[3];
-    char *outputFilename = argv[4];
+    char *input_filename = argv[3];
+    char *output_filename = argv[4];
 
     Object** objects = malloc(sizeof(Object*) * 128);
 
@@ -46,12 +51,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    read_scene(inputFilename, objects);
-    Image* buffer = RayCasting(inputFilename, w, h, objects);
-
+    read_scene(input_filename, objects);
+    Image* buffer = ray_casting(input_filename, w, h, objects);
     buffer->width = w;
     buffer->height = h;
-    writeImage("P3", outputFilename, buffer);
+    write_image("P3", output_filename, buffer);
   return 0;
 }
 
@@ -69,7 +73,7 @@ static inline void normalize(double* v) {
 
 
 double sphere_intersection(double* Ro, double* Rd, double* Center, double r){
-   double a = sqr(Rd[0]) + sqr(Rd[1]) + sqr(Rd[2]);
+   	double a = sqr(Rd[0]) + sqr(Rd[1]) + sqr(Rd[2]);
   	double b = 2*(Ro[0]*Rd[0] + Ro[1]*Rd[1] + Ro[2]*Rd[2] - Rd[0]*Center[0] - Rd[1]*Center[1] - Rd[2]*Center[2]);
   	double c = sqr(Ro[0]) + sqr(Ro[1]) + sqr(Ro[2]) + sqr(Center[0]) +
              sqr(Center[1]) + sqr(Center[2]) - 2*(Ro[0]*Center[0]
@@ -90,7 +94,7 @@ double sphere_intersection(double* Ro, double* Rd, double* Center, double r){
     return -1;
 }
 
-double planeIntersection(double* Ro, double* Rd, double* position, double* normal){
+double plane_intersection(double* Ro, double* Rd, double* position, double* normal){
     double t = - (normal[0]*Ro[0] + normal[1]*Ro[1] + normal[2]*Ro[2] - normal[0]*position[0]
                 - normal[1]*position[1] - normal[2]*position[2]) / (normal[0]*Rd[0]
                 + normal[1]*Rd[1] + normal[2]*Rd[2]);
@@ -101,9 +105,9 @@ double planeIntersection(double* Ro, double* Rd, double* position, double* norma
     return -1;
 }
 
-int writeData(char ppmnum, FILE *outputFile, Image* buffer){
+int write_data(char ppmnum, FILE *output_file, Image* buffer){
     if(ppmnum == '6'){
-        fwrite(buffer->data, sizeof(Pixel), buffer->width*buffer->height, outputFile);
+        fwrite(buffer->data, sizeof(Pixel), buffer->width*buffer->height, output_file);
         printf("File saved successfully!\n");
         return(0);
     }
@@ -111,9 +115,9 @@ int writeData(char ppmnum, FILE *outputFile, Image* buffer){
         int i, j;
         for(i=0; i<buffer->height; i++){
             for(j=0; j<buffer->width; j++){
-                fprintf(outputFile, "%d %d %d ", buffer->data[i*buffer->width*3+j*3], buffer->data[i*buffer->width*3+j*3+1], buffer->data[i*buffer->width*3+2]);
+                fprintf(output_file, "%d %d %d ", buffer->data[i*buffer->width*3+j*3], buffer->data[i*buffer->width*3+j*3+1], buffer->data[i*buffer->width*3+2]);
             }
-            fprintf(outputFile, "\n");
+            fprintf(output_file, "\n");
         }
         printf("The file saved successfully!\n");
         return(0);
@@ -124,11 +128,11 @@ int writeData(char ppmnum, FILE *outputFile, Image* buffer){
     }
 }
 
-int writeImage(char* outnumber, char* outputFilename, Image* buffer){
+int write_image(char* outnumber, char* output_filename, Image* buffer){
     int width = buffer->width;
     int height = buffer->height;
     char ppmNum = outnumber[1];
-    FILE *fh = fopen(outputFilename, "wb");
+    FILE *fh = fopen(output_filename, "wb");
     if(fh == NULL){
         fprintf(stderr, "Error: cannot open the file\n");
         return(1);
@@ -137,24 +141,24 @@ int writeImage(char* outnumber, char* outputFilename, Image* buffer){
     char *comment = "# output.ppm";
 
     fprintf(fh, "P%c\n%s\n%d %d\n%d\n", ppmNum, comment, width, height, 255);
-    writeData(ppmNum, fh, buffer);
+    write_data(ppmNum, fh, buffer);
     fclose(fh);
     return(0);
 }
 
-int intersect(double* Rd, int objectNum, Object** objects){
-    int closestObjectNum = -1;
+double* intersect(double* Rd, int object_num, Object** objects){
+    int closest_object_num = -1;
     double closest_t = INFINITY;
     int i;
     double t;
     double Ro[3] = {0, 0, 0};
-    for(i=0; i<objectNum; i++){
+    for(i=0; i<object_num; i++){
         if(objects[i]->type==1){
             t=sphere_intersection(Ro, Rd, objects[i]->sphere.position, objects[i]->sphere.radius);
             if(t){
                 if(t>0 && t<=closest_t){
                     closest_t=t;
-                    closestObjectNum=i;
+                    closest_object_num=i;
                 }
             }
             else{
@@ -163,11 +167,11 @@ int intersect(double* Rd, int objectNum, Object** objects){
             }
         }
         else if(objects[i]->type == 2){
-            t=planeIntersection(Ro, Rd, objects[i]->plane.position, objects[i]->plane.normal);
+            t=plane_intersection(Ro, Rd, objects[i]->plane.position, objects[i]->plane.normal);
             if(t){
                 if(t>0 && t<=closest_t){
                     closest_t=t;
-                    closestObjectNum=i;
+                    closest_object_num=i;
                 }
             }
             else{
@@ -176,23 +180,29 @@ int intersect(double* Rd, int objectNum, Object** objects){
             }
         }
     }
-    return closestObjectNum;
+    double* result_v;
+    result_v = malloc(sizeof(double) * 2);
+    result_v[0] = (double) closest_object_num;
+    result_v[1] = closest_t;
+    
+    return result_v;
 }
 
-Image* RayCasting(char* filename, int w, int h, Object** objects){
+Image* ray_casting(char* filename, int w, int h, Object** objects){
     Image* buffer = (Image*)malloc(sizeof(Image));
     if(objects[0] == NULL){
         fprintf(stderr, "Error: no object found");
         exit(1);
     }
 
-    int cameraFound = 0;
+    int camera_found = 0;
+    int light_counter = 0;
     double width;
     double height;
     int i;
     for(i=0; objects[i] != 0; i+=1){
-        if(objects[i]->type==0){
-            cameraFound=1;
+        if(objects[i]->type == 0){
+            camera_found=1;
             width=objects[i]->camera.width;
             height=objects[i]->camera.height;
             if(width<=0 || height<=0){
@@ -200,9 +210,12 @@ Image* RayCasting(char* filename, int w, int h, Object** objects){
                 exit(1);
             }
         }
+        else if(objects[i]->type == 3){
+        	light_counter += 1;
+		}
     }
 
-    if(cameraFound==0){
+    if(camera_found == 0){
         fprintf(stderr, "Error: Camera is not found\n");
         exit(1);
     }
@@ -217,6 +230,7 @@ Image* RayCasting(char* filename, int w, int h, Object** objects){
     double pixwidth = width/w;
     double pixheight = height / h;
     int j, k;
+    double Ro[3] = {0, 0, 0};
 
     for(k=0; k<h; k++){
         int count = (h-k-1)*w*3;
@@ -226,21 +240,257 @@ Image* RayCasting(char* filename, int w, int h, Object** objects){
             double Rd[3] = {vx, vy, 1};
 
             normalize(Rd);
-            int intersection = intersect(Rd, i, objects);
+            
+            double* inter;
+            inter = malloc(sizeof(double) * 2);
+            int intersection;
+            inter = intersect(Rd, i, objects);
+            intersection = (int)inter[0];
+            double closest_t = inter[1];
             if(intersection>=0){
-                pixel->r = (int)((objects[intersection]->color[0])*255);
-                pixel->g = (int)((objects[intersection]->color[1])*255);
-                pixel->b = (int)((objects[intersection]->color[2])*255);
+            	double Ron[3];
+            	double N[3];
+            	double V[3];
+            	V[0] = Rd[0];
+            	V[1] = Rd[1];
+            	V[2] = Rd[2];
+            	Ron[0] = closest_t*Rd[0] + Ro[0];
+            	Ron[1] = closest_t*Rd[1] + Ro[1];
+            	Ron[2] = closest_t*Rd[2] + Ro[2];
+            	if(objects[intersection]->type == 1){
+            		N[0] = Ron[0] - objects[intersection]->sphere.position[0];
+					N[1] = Ron[1] - objects[intersection]->sphere.position[1];
+					N[2] = Ron[2] - objects[intersection]->sphere.position[2];
+				}
+				else if (objects[intersection]->type == 2){
+					N[0] = objects[intersection]->plane.normal[0];
+					N[1] = objects[intersection]->plane.normal[1];
+					N[2] = objects[intersection]->plane.normal[2];
+				}
+				
+				normalize(N);
+				double intersect_position[3];
+				intersect_position[0] = Ro[0] + Rd[0] * closest_t;
+				intersect_position[1] = Ro[1] + Rd[1] * closest_t;
+				intersect_position[2] = Ro[2] + Rd[2] * closest_t;
+				
+				int s, q;
+				for(s = 0; s < light_counter; s++){
+					double L[3];
+					double R[3];
+					double Rdn[3];
+					
+					for(q = 0; objects[q] != 0; q++){
+						if(objects[q]->type == 3){
+							Rdn[0] = objects[q]->light.position[0] - Ron[0];
+							Rdn[1] = objects[q]->light.position[1] - Ron[1];
+							Rdn[2] = objects[q]->light.position[2] - Ron[2];
+							normalize(Rdn);
+							
+							L[0] = Rdn[0];
+							L[1] = Rdn[1];
+							L[2] = Rdn[2];
+							
+							normalize(Rdn);
+							
+							double NL = N[0] * L[0] + N[1] * L[1] + N[2] * L[2];
+							
+							R[0] = 2 * NL * N[0] - L[0];
+							R[1] = 2 * NL * N[1] - L[1];
+							R[2] = 2 * NL * N[2] - L[2];
+							
+							double* diff;
+							double* spec;
+							
+							diff = malloc(sizeof(double) * 3);
+							spec = malloc(sizeof(double) * 3);
+							double fr, fa;
+							
+							fr = frad(q, intersect_position, objects);
+							fa = fang(q, intersect_position, objects);
+							
+							diff = diffuse(intersection, q, N, L, objects);
+							spec = specular(intersection, q, NL, V, R, objects);
+							
+							pixel->r += fr*fa*(diff[0]+spec[0]);
+							pixel->g += fr*fa*(diff[1]+spec[1]);
+							pixel->b += fr*fa*(diff[2]+spec[2]);
+						}
+					}
+				}	
             }
             else{
                 pixel->r = 0;
                 pixel->g = 0;
                 pixel->b = 0;
             }
-            buffer->data[count++] = pixel->r;
-            buffer->data[count++] = pixel->g;
-            buffer->data[count++] = pixel->b;
+            buffer->data[count++] = 255 * clamp(pixel->r);
+            buffer->data[count++] = 255 * clamp(pixel->g);
+            buffer->data[count++] = 255 * clamp(pixel->b);
         }
     }
     return buffer;
+}
+
+double frad(int light_index, double* intersection, Object** objects){
+	double light_position[3];
+	double radial[3];
+	double distance;
+	double calc;
+	
+	light_position[0] = objects[light_index]->light.position[0];
+	light_position[1] = objects[light_index]->light.position[1];
+	light_position[2] = objects[light_index]->light.position[2];
+	
+	distance = sqr(light_position[0] - intersection[0]) + sqr(light_position[1] - intersection[1]) + sqr(light_position[2] - intersection[2]);
+	distance = sqrt(distance);
+	
+	radial[0] = objects[light_index]->light.radial_a0;
+	radial[1] = objects[light_index]->light.radial_a1;
+	radial[2] = objects[light_index]->light.radial_a2;
+	
+	if(distance == INFINITY){
+		return 1.0;
+	}
+	else{
+		calc = 1 / (radial[2] * sqr(distance) + radial[1]*distance + radial[0]);
+		return calc;
+	}
+}
+
+double fang(int light_index, double* intersection, Object** objects){
+	double vl[3];
+	double vo[3];
+	double angular;
+	double theta;
+	
+	vl[0] = objects[light_index]->light.direction[0];
+	vl[1] = objects[light_index]->light.direction[1];
+	vl[2] = objects[light_index]->light.direction[2];
+	normalize(vl);
+	
+	vo[0] = intersection[0] - objects[light_index]->light.position[0];
+	vo[1] = intersection[1] - objects[light_index]->light.position[1];
+	vo[2] = intersection[2] - objects[light_index]->light.position[2];
+	normalize(vo);
+	
+	double cosa = vl[0] * vo[0] + vl[1] * vo[1] + vl[2] * vo[2];
+	if(objects[light_index]->light.angular_a0 != 0){
+		angular = objects[light_index]->light.angular_a0;
+	}
+	else{
+		return 1.0;
+	}
+	
+	theta = objects[light_index]->light.theta;
+	if(cos(theta) > cosa){
+		return 0.0;
+	}
+	else{
+		return pow(cosa, angular);
+	}
+}
+
+double* diffuse(int object_index, int light_index, double* N, double* L, Object** objects){
+	double val = N[0] * L[0] + N[1] * L[1] + N[2] * L[2];
+	double* calc;
+	calc = malloc(sizeof(double) * 3);
+	
+	if (val <= 0){
+		calc[0] = 0;
+		calc[1] = 0;
+		calc[2] = 0;
+	}
+	else {
+		if (objects[object_index]->type == 1){
+			double KI[3];
+			double NL;
+			KI[0] = objects[object_index]->sphere.diffuse_color[0]*objects[light_index]->light.color[0];
+			KI[1] = objects[object_index]->sphere.diffuse_color[1]*objects[light_index]->light.color[1];
+			KI[2] = objects[object_index]->sphere.diffuse_color[2]*objects[light_index]->light.color[2];
+			
+			NL = val;
+			calc[0] = KI[0]*val;
+			calc[1] = KI[1]*val;
+			calc[2] = KI[2]*val;
+		}
+		else if (objects[object_index]->type == 2){
+			double KI[3];
+			double NL;
+			KI[0] = objects[object_index]->plane.diffuse_color[0]*objects[light_index]->light.color[0];
+			KI[1] = objects[object_index]->plane.diffuse_color[1]*objects[light_index]->light.color[1];
+			KI[2] = objects[object_index]->plane.diffuse_color[2]*objects[light_index]->light.color[2];
+			
+			NL = val;
+			calc[0] = KI[0]*val;
+			calc[1] = KI[1]*val;
+			calc[2] = KI[2]*val;
+		}
+	}
+	return calc;
+}
+
+double* specular(int object_index, int light_index, double NL, double* V, double* R, Object** objects){
+	double val = V[0] * R[0] + V[1] * R[1] + V[2] * R[2];
+	double* calc;
+	calc = malloc(sizeof(double) * 3);
+	if (NL <= 0 || val <= 0){
+		calc[0] = 0;
+		calc[1] = 0;
+		calc[2] = 0;
+	}
+	else {
+		if (objects[object_index]->type == 1){
+			double KI[3];
+			double VR;
+			KI[0] = objects[object_index]->sphere.specular_color[0]*objects[light_index]->light.color[0];
+			KI[1] = objects[object_index]->sphere.specular_color[1]*objects[light_index]->light.color[1];
+			KI[2] = objects[object_index]->sphere.specular_color[2]*objects[light_index]->light.color[2];
+			
+			VR = val;
+			if(objects[object_index]->light.ns == 0){
+				calc[0] = KI[0]*pow(VR, 20);
+				calc[1] = KI[1]*pow(VR, 20);
+				calc[2] = KI[2]*pow(VR, 20);
+			}
+			else{
+				calc[0] = KI[0]*pow(VR, objects[object_index]->light.ns);
+				calc[1] = KI[1]*pow(VR, objects[object_index]->light.ns);
+				calc[2] = KI[2]*pow(VR, objects[object_index]->light.ns);
+			}
+		}
+		else if (objects[object_index]->type == 2){
+			double KI[3];
+			double VR;
+			KI[0] = objects[object_index]->plane.specular_color[0]*objects[light_index]->light.color[0];
+			KI[1] = objects[object_index]->plane.specular_color[1]*objects[light_index]->light.color[1];
+			KI[2] = objects[object_index]->plane.specular_color[2]*objects[light_index]->light.color[2];
+			
+			VR = val;
+			
+			if(objects[object_index]->light.ns == 0){
+				calc[0] = KI[0]*pow(VR, 20);
+				calc[1] = KI[1]*pow(VR, 20);
+				calc[2] = KI[2]*pow(VR, 20);
+			}
+			else{
+				calc[0] = KI[0]*pow(VR, objects[object_index]->light.ns);
+				calc[1] = KI[1]*pow(VR, objects[object_index]->light.ns);
+				calc[2] = KI[2]*pow(VR, objects[object_index]->light.ns);
+			}
+		}
+	}
+	return calc;
+}
+
+double clamp(double number){
+	if (number <= 0){
+		return 0;
+	}
+	else if (number >= 1){
+		return 1;
+	}
+	else {
+		return number;
+	}
 }

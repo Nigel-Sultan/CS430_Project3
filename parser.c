@@ -9,6 +9,7 @@ char* next_string(FILE*);
 double next_number(FILE*);
 double* next_vector(FILE*);
 void expect_c(FILE*, int);
+int next_c(FILE*);
 
 int line = 1;
 
@@ -93,8 +94,8 @@ void read_scene(char* filename, Object** objects) {
 					(strcmp(key, "radial-a2") == 0) ||
 					(strcmp(key, "radial-a1") == 0) ||
 					(strcmp(key, "radial-a0") == 0) ||
-					(strcmp(key, "angular-a0") == 0)
-					(strcmp(key, "theta") == 0)
+					(strcmp(key, "angular-a0") == 0) ||
+					(strcmp(key, "theta") == 0) ||
 					(strcmp(key, "ns") == 0)) {
                         double value = next_number(json);
                         if (strcmp(key, "width") == 0){
@@ -269,7 +270,7 @@ char* next_string(FILE* json) {
             exit(1);
         }
         if (c < 32 || c > 126) {
-            fprintf(stderr, "Error: Strings may contain only ascii characters.\n");
+            fprintf(stderr, "Error: Strings may contain only ascii characters on line %d.\n", line);
             exit(1);
         }
         buffer[i] = c;

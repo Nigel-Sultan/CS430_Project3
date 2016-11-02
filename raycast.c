@@ -7,9 +7,9 @@
 // Polymorphism in C
 
 typedef struct Pixel{
-    unsigned int r;    //create a pixel struct like discussed in class
-    unsigned int g;
-    unsigned int b;
+    double r;    //create a pixel struct like discussed in class
+    double g;
+    double b;
 }Pixel;
 
 typedef struct Image{   //image struct that keeps track of the data in the input file
@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
     Image* buffer = ray_casting(input_filename, w, h, objects);
     buffer->width = w;
     buffer->height = h;
-    write_image("P3", output_filename, buffer);
-  return 0;
+    write_image("P6", output_filename, buffer);
+	return 0;
 }
 
 static inline double sqr(double v) {
@@ -76,11 +76,11 @@ double sphere_intersection(double* Ro, double* Rd, double* Center, double r){
    	double a = sqr(Rd[0]) + sqr(Rd[1]) + sqr(Rd[2]);
   	double b = 2*(Ro[0]*Rd[0] + Ro[1]*Rd[1] + Ro[2]*Rd[2] - Rd[0]*Center[0] - Rd[1]*Center[1] - Rd[2]*Center[2]);
   	double c = sqr(Ro[0]) + sqr(Ro[1]) + sqr(Ro[2]) + sqr(Center[0]) +
-             sqr(Center[1]) + sqr(Center[2]) - 2*(Ro[0]*Center[0]
-+ Ro[1]*Center[1] + Ro[2]*Center[2]) - sqr(r);
+				sqr(Center[1]) + sqr(Center[2]) - 2*(Ro[0]*Center[0]
+				+ Ro[1]*Center[1] + Ro[2]*Center[2]) - sqr(r);
     double d = sqr(b) - 4*a*c;
     if(d < 0){
- 	return -1;
+		return -1;
     }
     d = sqrt(d);
     double t1 = (-b - d) / (2 * a);
@@ -163,7 +163,7 @@ double* intersect(double* Rd, int object_num, Object** objects){
             }
             else{
                 fprintf(stderr, "Error: cannot find distance\n");
-                return(1);
+                exit(1);
             }
         }
         else if(objects[i]->type == 2){
@@ -176,7 +176,7 @@ double* intersect(double* Rd, int object_num, Object** objects){
             }
             else{
                 fprintf(stderr, "Error: cannot find distance\n");
-                return (1);
+                exit (1);
             }
         }
     }
@@ -196,7 +196,6 @@ Image* ray_casting(char* filename, int w, int h, Object** objects){
     }
 
     int camera_found = 0;
-    int light_counter = 0;
     double width;
     double height;
     int i;
@@ -210,9 +209,6 @@ Image* ray_casting(char* filename, int w, int h, Object** objects){
                 exit(1);
             }
         }
-        else if(objects[i]->type == 3){
-        	light_counter += 1;
-		}
     }
 
     if(camera_found == 0){
@@ -234,9 +230,9 @@ Image* ray_casting(char* filename, int w, int h, Object** objects){
 
     for(k=0; k<h; k++){
         int count = (h-k-1)*w*3;
-        double vy = -height/2 + pixheight * (k+0.5);
-        for(j=0; j<h; j++){
-            double vx = -width/2+pixwidth*(j+0.5);
+        double vy = -height / 2 + pixheight * (k+0.5);
+        for(j=0; j<w; j++){
+            double vx = -width / 2 + pixwidth * (j+0.5);
             double Rd[3] = {vx, vy, 1};
 
             normalize(Rd);
@@ -247,6 +243,12 @@ Image* ray_casting(char* filename, int w, int h, Object** objects){
             inter = intersect(Rd, i, objects);
             intersection = (int)inter[0];
             double closest_t = inter[1];
+            
+            pixel->r = 0;
+        	pixel->g = 0;
+        	pixel->b = 0;
+        	
+        	int shadow = 0;
             if(intersection>=0){
             	double Ron[3];
             	double N[3];
@@ -270,34 +272,56 @@ Image* ray_casting(char* filename, int w, int h, Object** objects){
 				
 				normalize(N);
 				double intersect_position[3];
-				intersect_position[0] = Ro[0] + Rd[0] * closest_t;
-				intersect_position[1] = Ro[1] + Rd[1] * closest_t;
-				intersect_position[2] = Ro[2] + Rd[2] * closest_t;
+				intersect_position[0] = Ron[0];
+				intersect_position[1] = Ron[1];
+				intersect_position[2] = Ron[2];
+				
+				double L[3];
+				double R[3];
+				double Rdn[3];
+					
 				
 				int s, q;
-				for(s = 0; s < light_counter; s++){
-					double L[3];
-					double R[3];
-					double Rdn[3];
+				for(s = 0; objects[s] != 0; s++){
+					if(objects[s]->type == 3){
+						Rdn[0] = objects[s]->light.position[0] - Ron[0];
+						Rdn[1] = objects[s]->light.position[1] - Ron[1];
+						Rdn[2] = objects[s]->light.position[2] - Ron[2];
+						
+						double l;
+						double light_distance = sqrt(sqr(Rdn[0]) + sqr(Rdn[1]) + sqr(Rdn[2]));
+						l = light_distance;
+						
+						normalize(Rdn);
 					
-					for(q = 0; objects[q] != 0; q++){
-						if(objects[q]->type == 3){
-							Rdn[0] = objects[q]->light.position[0] - Ron[0];
-							Rdn[1] = objects[q]->light.position[1] - Ron[1];
-							Rdn[2] = objects[q]->light.position[2] - Ron[2];
-							normalize(Rdn);
-							
+						for(q = 0; objects[q] != 0; q++){
+							if(q != intersection){
+								if(objects[q]->type == 1){
+									l = sphere_intersection(Ron, Rdn, objects[q]->sphere.position, objects[q]->sphere.radius);
+									if(l > 0 && l < light_distance){
+										shadow = 1;
+									}
+								}
+								else if(objects[q]->type == 2){
+									l = plane_intersection(Ron, Rdn, objects[q]->plane.position, objects[q]->plane.normal);
+									if(l > 0 && l < light_distance){
+										shadow = 1;
+									}
+								}
+							}
+						}
+						if(shadow == 0){
 							L[0] = Rdn[0];
 							L[1] = Rdn[1];
 							L[2] = Rdn[2];
 							
-							normalize(Rdn);
+							normalize(L);
 							
 							double NL = N[0] * L[0] + N[1] * L[1] + N[2] * L[2];
 							
-							R[0] = 2 * NL * N[0] - L[0];
-							R[1] = 2 * NL * N[1] - L[1];
-							R[2] = 2 * NL * N[2] - L[2];
+							R[0] = -2 * NL * N[0] + L[0];
+							R[1] = -2 * NL * N[1] + L[1];
+							R[2] = -2 * NL * N[2] + L[2];
 							
 							double* diff;
 							double* spec;
@@ -306,11 +330,11 @@ Image* ray_casting(char* filename, int w, int h, Object** objects){
 							spec = malloc(sizeof(double) * 3);
 							double fr, fa;
 							
-							fr = frad(q, intersect_position, objects);
-							fa = fang(q, intersect_position, objects);
+							fr = frad(s, intersect_position, objects);
+							fa = fang(s, intersect_position, objects);
 							
-							diff = diffuse(intersection, q, N, L, objects);
-							spec = specular(intersection, q, NL, V, R, objects);
+							diff = diffuse(intersection, s, N, L, objects);
+							spec = specular(intersection, s, NL, V, R, objects);
 							
 							pixel->r += fr*fa*(diff[0]+spec[0]);
 							pixel->g += fr*fa*(diff[1]+spec[1]);
@@ -324,9 +348,9 @@ Image* ray_casting(char* filename, int w, int h, Object** objects){
                 pixel->g = 0;
                 pixel->b = 0;
             }
-            buffer->data[count++] = 255 * clamp(pixel->r);
-            buffer->data[count++] = 255 * clamp(pixel->g);
-            buffer->data[count++] = 255 * clamp(pixel->b);
+            buffer->data[count++] = (unsigned char)255 * clamp(pixel->r);
+            buffer->data[count++] = (unsigned char)255 * clamp(pixel->g);
+            buffer->data[count++] = (unsigned char)255 * clamp(pixel->b);
         }
     }
     return buffer;
@@ -342,7 +366,8 @@ double frad(int light_index, double* intersection, Object** objects){
 	light_position[1] = objects[light_index]->light.position[1];
 	light_position[2] = objects[light_index]->light.position[2];
 	
-	distance = sqr(light_position[0] - intersection[0]) + sqr(light_position[1] - intersection[1]) + sqr(light_position[2] - intersection[2]);
+	distance = sqr(light_position[0]-intersection[0]) + sqr(light_position[1]-intersection[1]) +
+				sqr(light_position[2]-intersection[2]);	
 	distance = sqrt(distance);
 	
 	radial[0] = objects[light_index]->light.radial_a0;
@@ -350,7 +375,7 @@ double frad(int light_index, double* intersection, Object** objects){
 	radial[2] = objects[light_index]->light.radial_a2;
 	
 	if(distance == INFINITY){
-		return 1.0;
+		return 1;
 	}
 	else{
 		calc = 1 / (radial[2] * sqr(distance) + radial[1]*distance + radial[0]);
@@ -362,7 +387,6 @@ double fang(int light_index, double* intersection, Object** objects){
 	double vl[3];
 	double vo[3];
 	double angular;
-	double theta;
 	
 	vl[0] = objects[light_index]->light.direction[0];
 	vl[1] = objects[light_index]->light.direction[1];
@@ -379,12 +403,11 @@ double fang(int light_index, double* intersection, Object** objects){
 		angular = objects[light_index]->light.angular_a0;
 	}
 	else{
-		return 1.0;
+		return 1;
 	}
 	
-	theta = objects[light_index]->light.theta;
-	if(cos(theta) > cosa){
-		return 0.0;
+	if(cos(objects[light_index]->light.theta) > cosa){
+		return 0;
 	}
 	else{
 		return pow(cosa, angular);
@@ -394,7 +417,10 @@ double fang(int light_index, double* intersection, Object** objects){
 double* diffuse(int object_index, int light_index, double* N, double* L, Object** objects){
 	double val = N[0] * L[0] + N[1] * L[1] + N[2] * L[2];
 	double* calc;
+	double* k;
+	
 	calc = malloc(sizeof(double) * 3);
+	k = malloc(sizeof(double) * 3);
 	
 	if (val <= 0){
 		calc[0] = 0;
@@ -403,80 +429,71 @@ double* diffuse(int object_index, int light_index, double* N, double* L, Object*
 	}
 	else {
 		if (objects[object_index]->type == 1){
-			double KI[3];
-			double NL;
-			KI[0] = objects[object_index]->sphere.diffuse_color[0]*objects[light_index]->light.color[0];
-			KI[1] = objects[object_index]->sphere.diffuse_color[1]*objects[light_index]->light.color[1];
-			KI[2] = objects[object_index]->sphere.diffuse_color[2]*objects[light_index]->light.color[2];
+			k[0] = objects[object_index]->sphere.diffuse_color[0]*objects[light_index]->light.color[0];
+			k[1] = objects[object_index]->sphere.diffuse_color[1]*objects[light_index]->light.color[1];
+			k[2] = objects[object_index]->sphere.diffuse_color[2]*objects[light_index]->light.color[2];
 			
-			NL = val;
-			calc[0] = KI[0]*val;
-			calc[1] = KI[1]*val;
-			calc[2] = KI[2]*val;
+			calc[0] = k[0]*val;
+			calc[1] = k[1]*val;
+			calc[2] = k[2]*val;
 		}
 		else if (objects[object_index]->type == 2){
-			double KI[3];
-			double NL;
-			KI[0] = objects[object_index]->plane.diffuse_color[0]*objects[light_index]->light.color[0];
-			KI[1] = objects[object_index]->plane.diffuse_color[1]*objects[light_index]->light.color[1];
-			KI[2] = objects[object_index]->plane.diffuse_color[2]*objects[light_index]->light.color[2];
+			k[0] = objects[object_index]->plane.diffuse_color[0]*objects[light_index]->light.color[0];
+			k[1] = objects[object_index]->plane.diffuse_color[1]*objects[light_index]->light.color[1];
+			k[2] = objects[object_index]->plane.diffuse_color[2]*objects[light_index]->light.color[2];
 			
-			NL = val;
-			calc[0] = KI[0]*val;
-			calc[1] = KI[1]*val;
-			calc[2] = KI[2]*val;
+			calc[0] = k[0]*val;
+			calc[1] = k[1]*val;
+			calc[2] = k[2]*val;
 		}
 	}
 	return calc;
 }
 
-double* specular(int object_index, int light_index, double NL, double* V, double* R, Object** objects){
-	double val = V[0] * R[0] + V[1] * R[1] + V[2] * R[2];
+double* specular(int object_index, int light_index, double val, double* V, double* R, Object** objects){
+	double val2 = V[0] * R[0] + V[1] * R[1] + V[2] * R[2];
 	double* calc;
+	double* k;
+	
 	calc = malloc(sizeof(double) * 3);
-	if (NL <= 0 || val <= 0){
+	k = malloc(sizeof(double) * 3);
+	
+	if (val <= 0 || val2 <= 0){
 		calc[0] = 0;
 		calc[1] = 0;
 		calc[2] = 0;
 	}
 	else {
 		if (objects[object_index]->type == 1){
-			double KI[3];
-			double VR;
-			KI[0] = objects[object_index]->sphere.specular_color[0]*objects[light_index]->light.color[0];
-			KI[1] = objects[object_index]->sphere.specular_color[1]*objects[light_index]->light.color[1];
-			KI[2] = objects[object_index]->sphere.specular_color[2]*objects[light_index]->light.color[2];
+			k[0] = objects[object_index]->sphere.specular_color[0]*objects[light_index]->light.color[0];
+			k[1] = objects[object_index]->sphere.specular_color[1]*objects[light_index]->light.color[1];
+			k[2] = objects[object_index]->sphere.specular_color[2]*objects[light_index]->light.color[2];
 			
-			VR = val;
 			if(objects[object_index]->light.ns == 0){
-				calc[0] = KI[0]*pow(VR, 20);
-				calc[1] = KI[1]*pow(VR, 20);
-				calc[2] = KI[2]*pow(VR, 20);
+				calc[0] = k[0]*pow(val2, 20);
+				calc[1] = k[1]*pow(val2, 20);
+				calc[2] = k[2]*pow(val2, 20);
 			}
 			else{
-				calc[0] = KI[0]*pow(VR, objects[object_index]->light.ns);
-				calc[1] = KI[1]*pow(VR, objects[object_index]->light.ns);
-				calc[2] = KI[2]*pow(VR, objects[object_index]->light.ns);
+				calc[0] = k[0]*pow(val2, objects[object_index]->light.ns);
+				calc[1] = k[1]*pow(val2, objects[object_index]->light.ns);
+				calc[2] = k[2]*pow(val2, objects[object_index]->light.ns);
 			}
 		}
 		else if (objects[object_index]->type == 2){
-			double KI[3];
-			double VR;
-			KI[0] = objects[object_index]->plane.specular_color[0]*objects[light_index]->light.color[0];
-			KI[1] = objects[object_index]->plane.specular_color[1]*objects[light_index]->light.color[1];
-			KI[2] = objects[object_index]->plane.specular_color[2]*objects[light_index]->light.color[2];
-			
-			VR = val;
-			
+			k[0] = objects[object_index]->plane.specular_color[0]*objects[light_index]->light.color[0];
+			k[1] = objects[object_index]->plane.specular_color[1]*objects[light_index]->light.color[1];
+			k[2] = objects[object_index]->plane.specular_color[2]*objects[light_index]->light.color[2];
+		
 			if(objects[object_index]->light.ns == 0){
-				calc[0] = KI[0]*pow(VR, 20);
-				calc[1] = KI[1]*pow(VR, 20);
-				calc[2] = KI[2]*pow(VR, 20);
+				calc[0] = k[0]*pow(val2, 20);
+				calc[1] = k[1]*pow(val2, 20);
+				calc[2] = k[2]*pow(val2, 20);
 			}
 			else{
-				calc[0] = KI[0]*pow(VR, objects[object_index]->light.ns);
-				calc[1] = KI[1]*pow(VR, objects[object_index]->light.ns);
-				calc[2] = KI[2]*pow(VR, objects[object_index]->light.ns);
+				calc[0] = k[0]*pow(val2, objects[object_index]->light.ns);
+				calc[1] = k[1]*pow(val2, objects[object_index]->light.ns);
+				calc[2] = k[2]*pow(val2, objects[object_index]->light.ns);
 			}
 		}
 	}
